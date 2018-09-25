@@ -29,9 +29,11 @@ INTERNAL DEPENDENCIES
 ################################################################################
 PATCHES 
 ################################################################################
+diff --git a/xen/arch/x86/hvm/hypercall.c b/xen/arch/x86/hvm/hypercall.c
+index 13dc322369..8de359f900 100644
 --- a/xen/arch/x86/hvm/hypercall.c
 +++ b/xen/arch/x86/hvm/hypercall.c
-@@ -128,6 +128,7 @@ static const hypercall_table_t hvm_hyper
+@@ -134,6 +134,7 @@ static const hypercall_table_t hvm_hypercall_table[] = {
  #ifdef CONFIG_TMEM
      HYPERCALL(tmem_op),
  #endif
@@ -39,9 +41,11 @@ PATCHES
      COMPAT_CALL(platform_op),
      COMPAT_CALL(mmuext_op),
      HYPERCALL(xenpmu_op),
+diff --git a/xen/arch/x86/hypercall.c b/xen/arch/x86/hypercall.c
+index 90e88c1d2c..f11e1e63e0 100644
 --- a/xen/arch/x86/hypercall.c
 +++ b/xen/arch/x86/hypercall.c
-@@ -65,6 +65,7 @@ const hypercall_args_t hypercall_args_ta
+@@ -65,6 +65,7 @@ const hypercall_args_t hypercall_args_table[NR_hypercalls] =
      ARGS(domctl, 1),
      ARGS(kexec_op, 2),
      ARGS(tmem_op, 1),
@@ -49,9 +53,11 @@ PATCHES
      ARGS(xenpmu_op, 2),
      ARGS(dm_op, 3),
      ARGS(mca, 1),
+diff --git a/xen/arch/x86/pv/hypercall.c b/xen/arch/x86/pv/hypercall.c
+index 8c0979e4ee..a9bb0e3396 100644
 --- a/xen/arch/x86/pv/hypercall.c
 +++ b/xen/arch/x86/pv/hypercall.c
-@@ -77,6 +77,7 @@ static const hypercall_table_t pv_hyperc
+@@ -78,6 +78,7 @@ const hypercall_table_t pv_hypercall_table[] = {
  #ifdef CONFIG_TMEM
      HYPERCALL(tmem_op),
  #endif
@@ -59,9 +65,11 @@ PATCHES
      HYPERCALL(xenpmu_op),
      COMPAT_CALL(dm_op),
      HYPERCALL(mca),
+diff --git a/xen/common/Makefile b/xen/common/Makefile
+index 24d4752ccc..c8255ce7e2 100644
 --- a/xen/common/Makefile
 +++ b/xen/common/Makefile
-@@ -55,6 +55,7 @@ obj-y += tasklet.o
+@@ -56,6 +56,7 @@ obj-y += tasklet.o
  obj-y += time.o
  obj-y += timer.o
  obj-y += trace.o
@@ -69,9 +77,11 @@ PATCHES
  obj-y += version.o
  obj-y += virtual_region.o
  obj-y += vm_event.o
+diff --git a/xen/common/domain.c b/xen/common/domain.c
+index 6cbf135457..1e0d02a35f 100644
 --- a/xen/common/domain.c
 +++ b/xen/common/domain.c
-@@ -267,7 +267,8 @@ struct domain *domain_create(domid_t dom
+@@ -265,7 +265,8 @@ struct domain *domain_create(domid_t domid,
  {
      struct domain *d, **pd, *old_hwdom = NULL;
      enum { INIT_xsm = 1u<<0, INIT_watchdog = 1u<<1, INIT_rangeset = 1u<<2,
@@ -79,9 +89,9 @@ PATCHES
 +           INIT_evtchn = 1u<<3, INIT_gnttab = 1u<<4, INIT_arch = 1u<<5,
 +           INIT_v4v = 1u<<6 };
      int err, init_status = 0;
-     int poolid = CPUPOOLID_NONE;
  
-@@ -293,6 +294,7 @@ struct domain *domain_create(domid_t dom
+     if ( (d = alloc_domain_struct()) == NULL )
+@@ -290,6 +291,7 @@ struct domain *domain_create(domid_t domid,
      spin_lock_init(&d->hypercall_deadlock_mutex);
      INIT_PAGE_LIST_HEAD(&d->page_list);
      INIT_PAGE_LIST_HEAD(&d->xenpage_list);
@@ -89,19 +99,19 @@ PATCHES
  
      spin_lock_init(&d->node_affinity_lock);
      d->node_affinity = NODE_MASK_ALL;
-@@ -367,6 +369,10 @@ struct domain *domain_create(domid_t dom
+@@ -368,6 +370,10 @@ struct domain *domain_create(domid_t domid,
              goto fail;
          init_status |= INIT_gnttab;
  
-+	if ( v4v_init(d) !=0 )
-+	    goto fail;
-+	init_status |= INIT_v4v;
++        if ( v4v_init(d) !=0 )
++            goto fail;
++        init_status |= INIT_v4v;
 +
-         poolid = 0;
- 
          err = -ENOMEM;
-@@ -410,6 +416,8 @@ struct domain *domain_create(domid_t dom
-     xfree(d->pbuf);
+ 
+         d->pbuf = xzalloc_array(char, DOMAIN_PBUF_SIZE);
+@@ -422,6 +428,8 @@ struct domain *domain_create(domid_t domid,
+ 
      if ( init_status & INIT_arch )
          arch_domain_destroy(d);
 +    if ( init_status & INIT_v4v )
@@ -109,17 +119,19 @@ PATCHES
      if ( init_status & INIT_gnttab )
          grant_table_destroy(d);
      if ( init_status & INIT_evtchn )
-@@ -626,6 +634,7 @@ int domain_kill(struct domain *d)
-         domain_pause(d);
+@@ -646,6 +654,7 @@ int domain_kill(struct domain *d)
+         if ( d->is_dying != DOMDYING_alive )
+             return domain_kill(d);
          d->is_dying = DOMDYING_dying;
-         spin_barrier(&d->domain_lock);
-+	v4v_destroy(d);
++        v4v_destroy(d);
          evtchn_destroy(d);
          gnttab_release_mappings(d);
          tmem_destroy(d->tmem_client);
+diff --git a/xen/common/event_channel.c b/xen/common/event_channel.c
+index c62046590b..64c1e9de76 100644
 --- a/xen/common/event_channel.c
 +++ b/xen/common/event_channel.c
-@@ -753,7 +753,7 @@ void send_guest_vcpu_virq(struct vcpu *v
+@@ -746,7 +746,7 @@ void send_guest_vcpu_virq(struct vcpu *v, uint32_t virq)
      spin_unlock_irqrestore(&v->virq_lock, flags);
  }
  
@@ -128,6 +140,9 @@ PATCHES
  {
      unsigned long flags;
      int port;
+diff --git a/xen/common/v4v.c b/xen/common/v4v.c
+new file mode 100644
+index 0000000000..7f95e9714b
 --- /dev/null
 +++ b/xen/common/v4v.c
 @@ -0,0 +1,1964 @@
@@ -2095,9 +2110,11 @@ PATCHES
 + * indent-tabs-mode: nil
 + * End:
 + */
+diff --git a/xen/include/Makefile b/xen/include/Makefile
+index 8762ab3334..1d75664cfe 100644
 --- a/xen/include/Makefile
 +++ b/xen/include/Makefile
-@@ -95,7 +95,7 @@ all: headers.chk headers99.chk headers++
+@@ -101,7 +101,7 @@ all: headers.chk headers99.chk headers++.chk
  PUBLIC_HEADERS := $(filter-out public/arch-% public/dom0_ops.h, $(wildcard public/*.h public/*/*.h) $(public-y))
  
  PUBLIC_C99_HEADERS := public/io/9pfs.h public/io/pvcalls.h
@@ -2106,6 +2123,8 @@ PATCHES
  
  public/io/9pfs.h-prereq := string
  public/io/pvcalls.h-prereq := string
+diff --git a/xen/include/asm-x86/guest_access.h b/xen/include/asm-x86/guest_access.h
+index ca700c959a..9815a9cfb9 100644
 --- a/xen/include/asm-x86/guest_access.h
 +++ b/xen/include/asm-x86/guest_access.h
 @@ -48,7 +48,7 @@
@@ -2117,6 +2136,9 @@ PATCHES
      (XEN_GUEST_HANDLE_PARAM(type)) { _x };            \
  })
  
+diff --git a/xen/include/public/v4v.h b/xen/include/public/v4v.h
+new file mode 100644
+index 0000000000..631b69d4ea
 --- /dev/null
 +++ b/xen/include/public/v4v.h
 @@ -0,0 +1,529 @@
@@ -2649,6 +2671,8 @@ PATCHES
 + * indent-tabs-mode: nil
 + * End:
 + */
+diff --git a/xen/include/public/xen.h b/xen/include/public/xen.h
+index fb1df8f293..de4b1da9ec 100644
 --- a/xen/include/public/xen.h
 +++ b/xen/include/public/xen.h
 @@ -118,7 +118,7 @@ DEFINE_XEN_GUEST_HANDLE(xen_ulong_t);
@@ -2669,6 +2693,8 @@ PATCHES
  #define VIRQ_ENOMEM     12 /* G. (DOM0) Low on heap memory       */
  #define VIRQ_XENPMU     13 /* V.  PMC interrupt                              */
  
+diff --git a/xen/include/xen/sched.h b/xen/include/xen/sched.h
+index e79d5a36ca..a36a4f65fe 100644
 --- a/xen/include/xen/sched.h
 +++ b/xen/include/xen/sched.h
 @@ -15,6 +15,7 @@
@@ -2679,7 +2705,7 @@ PATCHES
  #include <xen/tasklet.h>
  #include <xen/mm.h>
  #include <xen/smp.h>
-@@ -479,6 +480,10 @@ struct domain
+@@ -486,6 +487,10 @@ struct domain
      rwlock_t vnuma_rwlock;
      struct vnuma_info *vnuma;
  
@@ -2690,6 +2716,9 @@ PATCHES
      /* Common monitor options */
      struct {
          unsigned int guest_request_enabled       : 1;
+diff --git a/xen/include/xen/v4v.h b/xen/include/xen/v4v.h
+new file mode 100644
+index 0000000000..8358c36896
 --- /dev/null
 +++ b/xen/include/xen/v4v.h
 @@ -0,0 +1,82 @@
@@ -2775,9 +2804,11 @@ PATCHES
 + * indent-tabs-mode: nil
 + * End:
 + */
+diff --git a/xen/include/xsm/dummy.h b/xen/include/xsm/dummy.h
+index ff6b2dbf39..dc63182e31 100644
 --- a/xen/include/xsm/dummy.h
 +++ b/xen/include/xsm/dummy.h
-@@ -705,6 +705,11 @@ static XSM_INLINE int xsm_dm_op(XSM_DEFA
+@@ -715,6 +715,11 @@ static XSM_INLINE int xsm_dm_op(XSM_DEFAULT_ARG struct domain *d)
      return xsm_default_action(action, current->domain, d);
  }
  
@@ -2789,17 +2820,19 @@ PATCHES
  #endif /* CONFIG_X86 */
  
  #include <public/version.h>
+diff --git a/xen/include/xsm/xsm.h b/xen/include/xsm/xsm.h
+index f0c6fc7e29..978f92cb08 100644
 --- a/xen/include/xsm/xsm.h
 +++ b/xen/include/xsm/xsm.h
 @@ -181,6 +181,7 @@ struct xsm_operations {
-     int (*dm_op) (struct domain *d);
  #endif
      int (*xen_version) (uint32_t cmd);
+     int (*domain_resource_map) (struct domain *d);
 +    int (*v4v_send) (struct domain *dom1, struct domain *dom2);
  };
  
  #ifdef CONFIG_XSM
-@@ -691,6 +692,11 @@ static inline int xsm_dm_op(xsm_default_
+@@ -686,6 +687,11 @@ static inline int xsm_dm_op(xsm_default_t def, struct domain *d)
      return xsm_ops->dm_op(d);
  }
  
@@ -2811,18 +2844,22 @@ PATCHES
  #endif /* CONFIG_X86 */
  
  static inline int xsm_xen_version (xsm_default_t def, uint32_t op)
+diff --git a/xen/xsm/dummy.c b/xen/xsm/dummy.c
+index 6e751199ee..99380462fc 100644
 --- a/xen/xsm/dummy.c
 +++ b/xen/xsm/dummy.c
-@@ -158,4 +158,5 @@ void __init xsm_fixup_ops (struct xsm_op
+@@ -158,4 +158,5 @@ void __init xsm_fixup_ops (struct xsm_operations *ops)
  #endif
-     set_to_dummy_if_null(ops, memory_translate);
      set_to_dummy_if_null(ops, xen_version);
+     set_to_dummy_if_null(ops, domain_resource_map);
 +    set_to_dummy_if_null(ops, v4v_send);
  }
+diff --git a/xen/xsm/flask/hooks.c b/xen/xsm/flask/hooks.c
+index 78bc32602e..d75083ec1c 100644
 --- a/xen/xsm/flask/hooks.c
 +++ b/xen/xsm/flask/hooks.c
-@@ -1718,6 +1718,11 @@ static int flask_xen_version (uint32_t o
-     }
+@@ -1719,6 +1719,11 @@ static int flask_domain_resource_map(struct domain *d)
+     return current_has_perm(d, SECCLASS_DOMAIN2, DOMAIN2__RESOURCE_MAP);
  }
  
 +static int flask_v4v_send(struct domain *dom1, struct domain *dom2)
@@ -2833,17 +2870,19 @@ PATCHES
  long do_flask_op(XEN_GUEST_HANDLE_PARAM(xsm_op_t) u_flask_op);
  int compat_flask_op(XEN_GUEST_HANDLE_PARAM(xsm_op_t) u_flask_op);
  
-@@ -1851,6 +1856,7 @@ static struct xsm_operations flask_ops =
-     .dm_op = flask_dm_op,
+@@ -1853,6 +1858,7 @@ static struct xsm_operations flask_ops = {
  #endif
      .xen_version = flask_xen_version,
+     .domain_resource_map = flask_domain_resource_map,
 +    .v4v_send = flask_v4v_send,
  };
  
  void __init flask_init(const void *policy_buffer, size_t policy_size)
+diff --git a/xen/xsm/flask/policy/access_vectors b/xen/xsm/flask/policy/access_vectors
+index c5d85486d0..b0ae147be5 100644
 --- a/xen/xsm/flask/policy/access_vectors
 +++ b/xen/xsm/flask/policy/access_vectors
-@@ -535,3 +535,8 @@ class version
+@@ -533,3 +533,8 @@ class version
  # Xen build id
      xen_build_id
  }
@@ -2852,6 +2891,8 @@ PATCHES
 +{
 +    send
 +}
+diff --git a/xen/xsm/flask/policy/security_classes b/xen/xsm/flask/policy/security_classes
+index cde4e1abbe..1fec728045 100644
 --- a/xen/xsm/flask/policy/security_classes
 +++ b/xen/xsm/flask/policy/security_classes
 @@ -19,5 +19,6 @@ class event
@@ -2861,3 +2902,6 @@ PATCHES
 +class v4v
  
  # FLASK
+-- 
+2.17.1
+
