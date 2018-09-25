@@ -34,9 +34,11 @@ INTERNAL DEPENDENCIES
 ################################################################################
 PATCHES 
 ################################################################################
+diff --git a/xen/arch/x86/hvm/hvm.c b/xen/arch/x86/hvm/hvm.c
+index 4cbb688c05..0374960507 100644
 --- a/xen/arch/x86/hvm/hvm.c
 +++ b/xen/arch/x86/hvm/hvm.c
-@@ -3193,6 +3193,37 @@ enum hvm_translation_result hvm_translat
+@@ -3199,6 +3199,37 @@ enum hvm_translation_result hvm_translate_get_page(
      return HVMTRANS_okay;
  }
  
@@ -74,53 +76,15 @@ PATCHES
  #define HVMCOPY_from_guest (0u<<0)
  #define HVMCOPY_to_guest   (1u<<0)
  #define HVMCOPY_phys       (0u<<2)
-@@ -3253,9 +3284,9 @@ static enum hvm_translation_result __hvm
+@@ -3259,9 +3290,9 @@ static enum hvm_translation_result __hvm_copy(
              else
              {
                  if ( buf )
 -                    memcpy(p, buf, count);
-+                    __hvm_atomic_copy(p, buf, count);
++                     __hvm_atomic_copy(p, buf, count);
                  else
 -                    memset(p, 0, count);
-+                    __hvm_atomic_zero(p, count);
-                 paging_mark_dirty(v->domain, _mfn(page_to_mfn(page)));
++                     __hvm_atomic_zero(p, count);
+                 paging_mark_pfn_dirty(v->domain, _pfn(gfn_x(gfn)));
              }
          }
---- a/xen/arch/x86/mm/shadow/multi.c
-+++ b/xen/arch/x86/mm/shadow/multi.c
-@@ -4705,6 +4705,26 @@ static void emulate_unmap_dest(struct vc
-     sh_emulate_unmap_dest(v, addr, bytes, sh_ctxt);
- }
- 
-+/*
-+ * Routine to make sh_x86_emulate_write appropriate to use for copying the
-+ * results of instruction emulation back to guest memory - these
-+ * typically require 64-bit, 32-bit and 16-bit writes to be atomic
-+ * whereas memcpy is only atomic for 64-bit writes. This is still
-+ * not 100% correct since copies larger than 64-bits will not be
-+ * atomic for the last 2-6 bytes but should be good enough for
-+ * instruction emulation
-+ */
-+static inline void __sh_atomic_write(
-+    void *to, const void *from, size_t count)
-+{
-+    if (count == sizeof(uint32_t))
-+        *(uint32_t *)to = *(uint32_t *)from;
-+    else if (count == sizeof(uint16_t))
-+        *(uint16_t *)to = *(uint16_t *)from;
-+    else
-+        memcpy(to, from, count);
-+}
-+
- static int
- sh_x86_emulate_write(struct vcpu *v, unsigned long vaddr, void *src,
-                      u32 bytes, struct sh_emulate_ctxt *sh_ctxt)
-@@ -4720,7 +4740,7 @@ sh_x86_emulate_write(struct vcpu *v, uns
-         return ~PTR_ERR(addr);
- 
-     paging_lock(v->domain);
--    memcpy(addr, src, bytes);
-+    __sh_atomic_write(addr, src, bytes);
- 
-     if ( tb_init_done )
-     {
